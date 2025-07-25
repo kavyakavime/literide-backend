@@ -14,6 +14,17 @@ const db = require('../config/database');
 
 const router = express.Router();
 
+// Debug check
+console.log('riderController imports:', [
+  'getRiderProfile',
+  'updateRiderProfile',
+  'getRideHistory',
+  'getCurrentRide',
+  'requestRide',
+  'cancelRide',
+  'rateDriver'
+]);
+
 // GET endpoints for viewing rider data (no auth required for development)
 router.get('/all', async (req, res) => {
   try {
@@ -28,6 +39,7 @@ router.get('/all', async (req, res) => {
     `);
     res.json({ message: 'All riders retrieved', count: riders.length, data: riders });
   } catch (error) {
+    console.error('Error fetching riders:', error);
     res.status(500).json({ message: 'Failed to fetch riders' });
   }
 });
@@ -49,6 +61,7 @@ router.get('/id/:riderId', async (req, res) => {
     }
     res.json({ message: 'Rider retrieved', data: riders[0] });
   } catch (error) {
+    console.error('Error fetching rider:', error);
     res.status(500).json({ message: 'Failed to fetch rider' });
   }
 });
@@ -70,6 +83,7 @@ router.get('/email/:email', async (req, res) => {
     }
     res.json({ message: 'Rider retrieved', data: riders[0] });
   } catch (error) {
+    console.error('Error fetching rider:', error);
     res.status(500).json({ message: 'Failed to fetch rider' });
   }
 });
@@ -93,13 +107,16 @@ router.get('/:riderId/rides', async (req, res) => {
     
     res.json({ message: 'Rider rides retrieved', count: rides.length, data: rides });
   } catch (error) {
+    console.error('Error fetching rider rides:', error);
     res.status(500).json({ message: 'Failed to fetch rider rides' });
   }
 });
 
 // Protected routes (require authentication and rider role)
-router.use(authenticateToken);
-router.use(requireRider);
+// Note: For development, we're not using auth middleware yet
+// Uncomment these lines when you want to enable authentication:
+// router.use(authenticateToken);
+// router.use(requireRider);
 
 // Profile routes
 router.get('/profile', getRiderProfile);

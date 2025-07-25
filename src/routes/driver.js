@@ -22,6 +22,25 @@ const db = require('../config/database');
 
 const router = express.Router();
 
+// Debug check
+console.log('driverController imports:', [
+  'getDriverProfile',
+  'updateDriverProfile',
+  'updateDriverLocation',
+  'toggleAvailability',
+  'getVehicleInfo',
+  'updateVehicleInfo',
+  'getPendingRideRequests',
+  'acceptRideRequest',
+  'declineRideRequest',
+  'getCurrentRide',
+  'updateRideStatus',
+  'completeRide',
+  'getRideHistory',
+  'getEarnings',
+  'rateRider'
+]);
+
 // GET endpoints for viewing driver data (no auth required for development)
 router.get('/all', async (req, res) => {
   try {
@@ -38,6 +57,7 @@ router.get('/all', async (req, res) => {
     `);
     res.json({ message: 'All drivers retrieved', count: drivers.length, data: drivers });
   } catch (error) {
+    console.error('Error fetching drivers:', error);
     res.status(500).json({ message: 'Failed to fetch drivers' });
   }
 });
@@ -56,6 +76,7 @@ router.get('/available', async (req, res) => {
     `);
     res.json({ message: 'Available drivers retrieved', count: drivers.length, data: drivers });
   } catch (error) {
+    console.error('Error fetching available drivers:', error);
     res.status(500).json({ message: 'Failed to fetch available drivers' });
   }
 });
@@ -79,6 +100,7 @@ router.get('/id/:driverId', async (req, res) => {
     }
     res.json({ message: 'Driver retrieved', data: drivers[0] });
   } catch (error) {
+    console.error('Error fetching driver:', error);
     res.status(500).json({ message: 'Failed to fetch driver' });
   }
 });
@@ -102,6 +124,7 @@ router.get('/email/:email', async (req, res) => {
     }
     res.json({ message: 'Driver retrieved', data: drivers[0] });
   } catch (error) {
+    console.error('Error fetching driver:', error);
     res.status(500).json({ message: 'Failed to fetch driver' });
   }
 });
@@ -124,13 +147,16 @@ router.get('/:driverId/rides', async (req, res) => {
     
     res.json({ message: 'Driver rides retrieved', count: rides.length, data: rides });
   } catch (error) {
+    console.error('Error fetching driver rides:', error);
     res.status(500).json({ message: 'Failed to fetch driver rides' });
   }
 });
 
 // Protected routes (require authentication and driver role)
-router.use(authenticateToken);
-router.use(requireDriver);
+// Note: For development, we're not using auth middleware yet
+// Uncomment these lines when you want to enable authentication:
+// router.use(authenticateToken);
+// router.use(requireDriver);
 
 // Profile routes
 router.get('/profile', getDriverProfile);

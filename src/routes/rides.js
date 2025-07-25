@@ -1,9 +1,12 @@
-// src/routes/rides.js
+console.log('ridesController imports:', Object.keys(require('../controllers/ridesController')));
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const {
   getAllRides,
   getRideById,
+  createRide,
+  updateRideStatus,
+  cancelRide,
   searchAvailableDrivers,
   getRideStatistics
 } = require('../controllers/ridesController');
@@ -32,6 +35,7 @@ router.get('/all', async (req, res) => {
     `);
     res.json({ message: 'All rides retrieved', count: rides.length, data: rides });
   } catch (error) {
+    console.error('Error fetching rides:', error);
     res.status(500).json({ message: 'Failed to fetch rides' });
   }
 });
@@ -55,6 +59,7 @@ router.get('/active', async (req, res) => {
     `);
     res.json({ message: 'Active rides retrieved', count: rides.length, data: rides });
   } catch (error) {
+    console.error('Error fetching active rides:', error);
     res.status(500).json({ message: 'Failed to fetch active rides' });
   }
 });
@@ -85,6 +90,7 @@ router.get('/status/:status', async (req, res) => {
 
     res.json({ message: `${status} rides retrieved`, count: rides.length, data: rides });
   } catch (error) {
+    console.error('Error fetching rides by status:', error);
     res.status(500).json({ message: 'Failed to fetch rides' });
   }
 });
@@ -113,6 +119,7 @@ router.get('/ride/:rideId', async (req, res) => {
     }
     res.json({ message: 'Ride retrieved', data: rides[0] });
   } catch (error) {
+    console.error('Error fetching ride:', error);
     res.status(500).json({ message: 'Failed to fetch ride' });
   }
 });
@@ -131,12 +138,18 @@ router.get('/stats', async (req, res) => {
     `);
     res.json({ message: 'Ride statistics retrieved', data: stats[0] });
   } catch (error) {
+    console.error('Error fetching ride statistics:', error);
     res.status(500).json({ message: 'Failed to fetch statistics' });
   }
 });
 
 // Protected routes (require authentication)
 router.use(authenticateToken);
+
+// POST routes for creating and managing rides
+router.post('/create', createRide);
+router.post('/:rideId/cancel', cancelRide);
+router.put('/:rideId/status', updateRideStatus);
 
 // General ride routes
 router.get('/', getAllRides);

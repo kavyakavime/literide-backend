@@ -210,6 +210,183 @@ const getRideById = async (req, res) => {
   }
 };
 
+const createRide = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userType = req.user.user_type;
+    
+    if (userType !== 'rider') {
+      return res.status(403).json({ message: 'Only riders can create rides' });
+    }
+
+    const { pickupLocation, destination, rideType, scheduledTime } = req.body;
+
+    // Validation
+    if (!pickupLocation || !destination || !rideType) {
+      return res.status(400).json({ message: 'Pickup location, destination, and ride type are required' });
+    }
+
+    // Get rider ID
+    const [riders] = await db.execute(
+      'SELECT id FROM riders WHERE user_id = ?',
+      [userId]
+    );
+
+    if (riders.length === 0) {
+      return res.status(404).json({ message: 'Rider profile not found' });
+    }
+
+    const riderId = riders[0].id;
+
+    // Generate ride ID and OTP
+    const rideId = `R${Date.now().toString().slice(-6)}`;
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Calculate estimated fare (simple calculation)
+    const estimatedFare = Math.floor(Math.random() * 20) + 10; // $10-30
+
+    // Create ride
+    const [result] = await db.execute(`
+      INSERT INTO rides (
+        ride_id, rider_id, pickup_location, destination, 
+        ride_type, estimated_fare, otp, status, scheduled_time
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'requested', ?)
+    `, [rideId, riderId, pickupLocation, destination, rideType, estimatedFare, otp, scheduledTime || null]);
+
+    res.status(201).json({
+      message: 'Ride created successfully',
+      ride: {
+        id: result.insertId,
+        rideId,
+        pickup: pickupLocation,
+        destination,
+        rideType,
+        estimatedFare,
+        status: 'requested',
+        otp
+      }
+    });
+  } catch (error) {
+    console.error('Create ride error:', error);
+    res.status(500).json({ message: 'Failed to create ride' });
+  }
+};
+
+const updateRideStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rideId } = req.params;
+    const { status, finalFare, distance, duration } = req.body;
+
+    const validStatuses = ['accepted', 'driver_on_way', 'rider_picked_up', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    // Build update query based on status
+    let updateQuery = 'UPDATE rides SET status = ?';
+    let params = [status];
+
+    if (status === 'completed') {
+      updateQuery += ', completed_at = CURRENT_TIMESTAMP';
+      if (finalFare) {
+        updateQuery += ', final_fare = ?';
+        params.push(finalFare);
+      }
+      if (distance) {
+        updateQuery += ', distance_km = ?';
+        params.push(distance);
+      }
+      if (duration) {
+        updateQuery += ', duration_minutes = ?';
+        params.push(duration);
+      }
+    } else if (status === 'cancelled') {
+      updateQuery += ', cancelled_at = CURRENT_TIMESTAMP';
+    } else if (status === 'rider_picked_up') {
+      updateQuery += ', started_at = CURRENT_TIMESTAMP';
+    } else if (status === 'accepted') {
+      updateQuery += ', accepted_at = CURRENT_TIMESTAMP';
+    }
+
+    updateQuery += ' WHERE ride_id = ?';
+    params.push(rideId);
+
+    // Check user access
+    if (req.user.user_type === 'rider') {
+      updateQuery += ' AND rider_id IN (SELECT id FROM riders WHERE user_id = ?)';
+      params.push(userId);
+    } else if (req.user.user_type === 'driver') {
+      updateQuery += ' AND driver_id IN (SELECT id FROM drivers WHERE user_id = ?)';
+      params.push(userId);
+    }
+
+    const [result] = await db.execute(updateQuery, params);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Ride not found or access denied' });
+    }
+
+    res.json({ message: 'Ride status updated successfully' });
+  } catch (error) {
+    console.error('Update ride status error:', error);
+    res.status(500).json({ message: 'Failed to update ride status' });
+  }
+};
+
+const cancelRide = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rideId } = req.params;
+    const { reason } = req.body;
+
+    // Find the ride
+    let query, params;
+    if (req.user.user_type === 'rider') {
+      query = `
+        SELECT r.id, r.status 
+        FROM rides r
+        JOIN riders rd ON r.rider_id = rd.id
+        WHERE rd.user_id = ? AND r.ride_id = ?
+      `;
+      params = [userId, rideId];
+    } else {
+      query = `
+        SELECT r.id, r.status 
+        FROM rides r
+        JOIN drivers d ON r.driver_id = d.id
+        WHERE d.user_id = ? AND r.ride_id = ?
+      `;
+      params = [userId, rideId];
+    }
+
+    const [rides] = await db.execute(query, params);
+
+    if (rides.length === 0) {
+      return res.status(404).json({ message: 'Ride not found' });
+    }
+
+    const ride = rides[0];
+
+    // Check if ride can be cancelled
+    if (!['requested', 'accepted', 'driver_on_way'].includes(ride.status)) {
+      return res.status(400).json({ message: 'Ride cannot be cancelled at this stage' });
+    }
+
+    // Cancel the ride
+    await db.execute(`
+      UPDATE rides 
+      SET status = 'cancelled', cancelled_at = CURRENT_TIMESTAMP, cancellation_reason = ?
+      WHERE id = ?
+    `, [reason || `Cancelled by ${req.user.user_type}`, ride.id]);
+
+    res.json({ message: 'Ride cancelled successfully' });
+  } catch (error) {
+    console.error('Cancel ride error:', error);
+    res.status(500).json({ message: 'Failed to cancel ride' });
+  }
+};
+
 const searchAvailableDrivers = async (req, res) => {
   try {
     const { lat, lng, rideType } = req.query;
@@ -329,6 +506,9 @@ const getRideStatistics = async (req, res) => {
 module.exports = {
   getAllRides,
   getRideById,
+  createRide,
+  updateRideStatus,
+  cancelRide,
   searchAvailableDrivers,
   getRideStatistics
 };
