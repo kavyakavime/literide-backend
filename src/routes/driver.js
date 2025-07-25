@@ -152,11 +152,10 @@ router.get('/:driverId/rides', async (req, res) => {
   }
 });
 
-// Protected routes (require authentication and driver role)
-// Note: For development, we're not using auth middleware yet
-// Uncomment these lines when you want to enable authentication:
-// router.use(authenticateToken);
-// router.use(requireDriver);
+// **IMPORTANT: Enable authentication for protected routes**
+// Apply authentication middleware to all routes below this line
+router.use(authenticateToken);
+router.use(requireDriver);
 
 // Profile routes
 router.get('/profile', getDriverProfile);

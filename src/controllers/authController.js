@@ -1,12 +1,15 @@
 // src/controllers/authController.js
 const db = require('../config/database');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_key';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 const register = async (req, res) => {
   try {
     console.log('Registration request received:', req.body);
     
     // Frontend sends: fullName, email, phoneNumber, password, role
-    // We need to map these to database field names
     const { fullName, email, phoneNumber, password, role } = req.body;
 
     // Validation
@@ -65,17 +68,35 @@ const register = async (req, res) => {
         );
         console.log('Rider profile created');
       } else if (role === 'driver') {
-        await connection.execute(
+        const [driverResult] = await connection.execute(
           'INSERT INTO drivers (user_id, license_number, license_expiry, is_verified) VALUES (?, ?, ?, TRUE)',
           [userId, 'PENDING', '2025-12-31'] // Placeholder values
         );
-        console.log('Driver profile created');
+        
+        // Create default vehicle for driver
+        await connection.execute(
+          'INSERT INTO vehicles (driver_id, vehicle_type, make, model, year, color, plate_number, registration_number, insurance_expiry, is_verified, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, TRUE)',
+          [driverResult.insertId, 'car', 'Honda', 'City', 2022, 'White', 'MH 01 AB 1234', 'REG123456', '2025-06-30']
+        );
+        
+        console.log('Driver profile and vehicle created');
       }
 
       await connection.commit();
       connection.release();
 
-      // Return success response in format expected by frontend
+      // Generate JWT token
+      const token = jwt.sign(
+        { 
+          userId: userId, 
+          email: email, 
+          userType: role 
+        },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+
+      // Return success response with token
       res.status(201).json({
         message: 'User registered successfully',
         user: {
@@ -83,7 +104,8 @@ const register = async (req, res) => {
           fullName: fullName,
           email: email,
           userType: role
-        }
+        },
+        token: token
       });
 
     } catch (error) {
@@ -155,9 +177,21 @@ const login = async (req, res) => {
       [user.id]
     );
 
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        userType: user.user_type,
+        fullName: user.full_name
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
     console.log('Login successful for user:', user.full_name);
 
-    // Return success response
+    // Return success response with token
     res.json({
       message: 'Login successful',
       user: {
@@ -165,7 +199,8 @@ const login = async (req, res) => {
         fullName: user.full_name,
         email: user.email,
         userType: user.user_type
-      }
+      },
+      token: token
     });
 
   } catch (error) {
