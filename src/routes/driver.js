@@ -1,4 +1,4 @@
-// src/routes/driver.js
+// src/routes/driver.js - Updated with current ride endpoints
 const express = require('express');
 const { authenticateToken, requireDriver } = require('../middleware/auth');
 const {
@@ -18,28 +18,19 @@ const {
   getEarnings,
   rateRider
 } = require('../controllers/driverController');
+
+// Import current ride controller functions
+const {
+  getDriverCurrentRide,
+  updateCurrentRideStatus,
+  updateDriverLocation: updateCurrentRideLocation,
+  completeCurrentRide,
+  cancelCurrentRide
+} = require('../controllers/currentRideController');
+
 const db = require('../config/database');
 
 const router = express.Router();
-
-// Debug check
-console.log('driverController imports:', [
-  'getDriverProfile',
-  'updateDriverProfile',
-  'updateDriverLocation',
-  'toggleAvailability',
-  'getVehicleInfo',
-  'updateVehicleInfo',
-  'getPendingRideRequests',
-  'acceptRideRequest',
-  'declineRideRequest',
-  'getCurrentRide',
-  'updateRideStatus',
-  'completeRide',
-  'getRideHistory',
-  'getEarnings',
-  'rateRider'
-]);
 
 // GET endpoints for viewing driver data (no auth required for development)
 router.get('/all', async (req, res) => {
@@ -172,10 +163,17 @@ router.get('/ride-requests', getPendingRideRequests);
 router.post('/ride-requests/:requestId/accept', acceptRideRequest);
 router.post('/ride-requests/:requestId/decline', declineRideRequest);
 
-// Current ride routes
-router.get('/current-ride', getCurrentRide);
-router.put('/current-ride/status', updateRideStatus);
-router.post('/current-ride/complete', completeRide);
+// Current ride routes - NEW ENDPOINTS USING CURRENT_RIDE TABLE
+router.get('/current-ride', getDriverCurrentRide);
+router.put('/current-ride/status', updateCurrentRideStatus);
+router.put('/current-ride/location', updateCurrentRideLocation);
+router.post('/current-ride/complete', completeCurrentRide);
+router.post('/current-ride/cancel', cancelCurrentRide);
+
+// Legacy current ride routes (keeping for backward compatibility)
+router.get('/current-ride-legacy', getCurrentRide);
+router.put('/current-ride-legacy/status', updateRideStatus);
+router.post('/current-ride-legacy/complete', completeRide);
 
 // History and earnings
 router.get('/rides/history', getRideHistory);
