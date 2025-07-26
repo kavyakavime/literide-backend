@@ -1,4 +1,5 @@
-// src/routes/rider.js - Updated with current ride endpoints
+// src/routes/rider.js - FIXED version
+
 const express = require('express');
 const { authenticateToken, requireRider } = require('../middleware/auth');
 const {
@@ -6,7 +7,7 @@ const {
   updateRiderProfile,
   getRideHistory,
   getCurrentRide,
-  requestRide: requestRideLegacy,  // Renamed to avoid conflict
+  requestRide: requestRideLegacy,
   cancelRide,
   rateDriver
 } = require('../controllers/riderController');
@@ -16,7 +17,7 @@ const {
   getRiderCurrentRide,
   cancelCurrentRide,
   createCurrentRide,
-  requestRide  // ADD THIS IMPORT - the new function we just added
+  requestRide
 } = require('../controllers/currentRideController');
 
 const db = require('../config/database');
@@ -110,24 +111,7 @@ router.get('/:riderId/rides', async (req, res) => {
   }
 });
 
-// Add a test endpoint for debugging (remove this after testing)
-router.post('/rides/test', (req, res) => {
-  console.log('=== RIDE TEST ENDPOINT ===');
-  console.log('Request body:', req.body);
-  console.log('User from token:', req.user);
-  console.log('Headers:', req.headers);
-  
-  res.json({ 
-    message: 'Test successful', 
-    receivedData: req.body, 
-    user: req.user,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Protected routes (require authentication and rider role)
-// Note: For development, we're not using auth middleware yet
-// Uncomment these lines when you want to enable authentication:
+// Protected routes - Apply authentication middleware BEFORE defining the routes
 router.use(authenticateToken);
 router.use(requireRider);
 
@@ -137,15 +121,15 @@ router.put('/profile', updateRiderProfile);
 
 // Ride routes
 router.get('/rides/history', getRideHistory);
-
-// Current ride routes - NEW ENDPOINTS USING CURRENT_RIDE TABLE
 router.get('/rides/current', getRiderCurrentRide);
 router.post('/rides/current/cancel', cancelCurrentRide);
-router.post('/rides/request', requestRide);  // CHANGED FROM createCurrentRide to requestRide
 
-// Legacy current ride routes (keeping for backward compatibility)
+// IMPORTANT: This is the main ride request endpoint your frontend uses
+router.post('/rides/request', requestRide);
+
+// Legacy routes (keeping for backward compatibility)
 router.get('/rides/current-legacy', getCurrentRide);
-router.post('/rides/request-legacy', requestRideLegacy);  // Using renamed function
+router.post('/rides/request-legacy', requestRideLegacy);
 router.post('/rides/:rideId/cancel-legacy', cancelRide);
 
 // Rating route

@@ -644,148 +644,155 @@ const createCurrentRide = async (req, res) => {
 /**
  * Request a new ride (proper implementation for frontend)
  */
+// src/controllers/currentRideController.js - UPDATED requestRide function
 const requestRide = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const {
-      pickup_location,
-      destination,
-      ride_type,
-      estimated_fare,
-      pickup_coordinates,
-      destination_coordinates
-    } = req.body;
-
-    console.log('=== RIDE REQUEST DEBUG ===');
-    console.log('User ID:', userId);
-    console.log('Request body:', req.body);
-
-    // Validate required fields
-    if (!pickup_location || !destination || !ride_type || !estimated_fare) {
-      return res.status(400).json({ 
-        message: 'Missing required fields: pickup_location, destination, ride_type, estimated_fare' 
-      });
-    }
-
-    const connection = await db.getConnection();
-    await connection.beginTransaction();
-
     try {
-      // Get rider data
-      const [riders] = await connection.execute(`
-        SELECT r.id, u.full_name, u.phone_number
-        FROM riders r
-        JOIN users u ON r.user_id = u.id
-        WHERE u.id = ?
-      `, [userId]);
-
-      if (riders.length === 0) {
-        await connection.rollback();
-        connection.release();
-        return res.status(404).json({ message: 'Rider profile not found' });
-      }
-
-      const rider = riders[0];
-      console.log('Found rider:', rider);
-
-      // Check for existing active ride
-      const [existingRides] = await connection.execute(`
-        SELECT id FROM current_ride 
-        WHERE rider_id = ? AND status IN ('requested', 'accepted', 'driver_on_way', 'rider_picked_up')
-      `, [rider.id]);
-
-      if (existingRides.length > 0) {
-        await connection.rollback();
-        connection.release();
-        return res.status(400).json({ 
-          message: 'You already have an active ride. Please complete or cancel it first.' 
-        });
-      }
-
-      // Generate unique ride ID and OTP
-      const rideId = 'RIDE_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      const otp = Math.floor(1000 + Math.random() * 9000).toString();
-
-      // Set expiration time (10 minutes for ride requests)
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-      console.log('Creating ride with ID:', rideId);
-
-      // Insert into current_ride table
-      await connection.execute(`
-        INSERT INTO current_ride (
-          ride_id, rider_id, pickup_location, destination,
-          pickup_lat, pickup_lng, destination_lat, destination_lng,
-          ride_type, status, otp, estimated_fare, 
-          rider_name, rider_phone, payment_method, expires_at, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?, 'cash', ?, CURRENT_TIMESTAMP)
-      `, [
-        rideId,
-        rider.id,
+      const userId = req.user.id;
+      const {
         pickup_location,
         destination,
-        pickup_coordinates?.lat || null,
-        pickup_coordinates?.lng || null,
-        destination_coordinates?.lat || null,
-        destination_coordinates?.lng || null,
         ride_type,
-        otp,
         estimated_fare,
-        rider.full_name,
-        rider.phone_number,
-        expiresAt
-      ]);
-
-      // Get the created ride
-      const [currentRides] = await connection.execute(`
-        SELECT 
-          id, ride_id, rider_id, pickup_location, destination,
-          ride_type, status, estimated_fare, otp, created_at
-        FROM current_ride 
-        WHERE ride_id = ?
-      `, [rideId]);
-
-      await connection.commit();
-      connection.release();
-
-      const currentRide = currentRides[0];
-      console.log('Created ride:', currentRide);
-
-      // Format response to match frontend expectations
-      const response = {
-        id: currentRide.id,
-        rider_id: currentRide.rider_id,
-        pickup_location: currentRide.pickup_location,
-        destination: currentRide.destination,
-        ride_type: currentRide.ride_type,
-        status: currentRide.status,
-        estimated_fare: currentRide.estimated_fare,
-        otp: currentRide.otp,
-        created_at: currentRide.created_at,
-        driver: null // No driver assigned yet
-      };
-
-      res.status(201).json({
-        success: true,
-        message: 'Ride requested successfully! Looking for available drivers...',
-        data: response
-      });
-
+        pickup_coordinates,
+        destination_coordinates
+      } = req.body;
+  
+      console.log('=== RIDE REQUEST DEBUG ===');
+      console.log('User ID:', userId);
+      console.log('Request body:', req.body);
+  
+      // Validate required fields
+      if (!pickup_location || !destination || !ride_type || !estimated_fare) {
+        return res.status(400).json({ 
+          success: false,
+          message: 'Missing required fields: pickup_location, destination, ride_type, estimated_fare' 
+        });
+      }
+  
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
+  
+      try {
+        // Get rider data
+        const [riders] = await connection.execute(`
+          SELECT r.id, u.full_name, u.phone_number
+          FROM riders r
+          JOIN users u ON r.user_id = u.id
+          WHERE u.id = ?
+        `, [userId]);
+  
+        if (riders.length === 0) {
+          await connection.rollback();
+          connection.release();
+          return res.status(404).json({ 
+            success: false,
+            message: 'Rider profile not found' 
+          });
+        }
+  
+        const rider = riders[0];
+        console.log('Found rider:', rider);
+  
+        // Check for existing active ride
+        const [existingRides] = await connection.execute(`
+          SELECT id FROM current_ride 
+          WHERE rider_id = ? AND status IN ('requested', 'accepted', 'driver_on_way', 'rider_picked_up')
+        `, [rider.id]);
+  
+        if (existingRides.length > 0) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({ 
+            success: false,
+            message: 'You already have an active ride. Please complete or cancel it first.' 
+          });
+        }
+  
+        // Generate unique ride ID and OTP
+        const rideId = 'RIDE_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+  
+        // Set expiration time (10 minutes for ride requests)
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  
+        console.log('Creating ride with ID:', rideId);
+  
+        // Insert into current_ride table
+        await connection.execute(`
+          INSERT INTO current_ride (
+            ride_id, rider_id, pickup_location, destination,
+            pickup_lat, pickup_lng, destination_lat, destination_lng,
+            ride_type, status, otp, estimated_fare, 
+            rider_name, rider_phone, payment_method, expires_at, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?, 'cash', ?, CURRENT_TIMESTAMP)
+        `, [
+          rideId,
+          rider.id,
+          pickup_location,
+          destination,
+          pickup_coordinates?.lat || null,
+          pickup_coordinates?.lng || null,
+          destination_coordinates?.lat || null,
+          destination_coordinates?.lng || null,
+          ride_type,
+          otp,
+          estimated_fare,
+          rider.full_name,
+          rider.phone_number,
+          expiresAt
+        ]);
+  
+        // Get the created ride
+        const [currentRides] = await connection.execute(`
+          SELECT 
+            id, ride_id, rider_id, pickup_location, destination,
+            ride_type, status, estimated_fare, otp, created_at
+          FROM current_ride 
+          WHERE ride_id = ?
+        `, [rideId]);
+  
+        await connection.commit();
+        connection.release();
+  
+        const currentRide = currentRides[0];
+        console.log('Created ride:', currentRide);
+  
+        // Format response to match frontend expectations
+        const response = {
+          id: currentRide.id,
+          rider_id: currentRide.rider_id,
+          pickup_location: currentRide.pickup_location,
+          destination: currentRide.destination,
+          ride_type: currentRide.ride_type,
+          status: currentRide.status,
+          estimated_fare: currentRide.estimated_fare,
+          otp: currentRide.otp,
+          created_at: currentRide.created_at,
+          driver: null // No driver assigned yet
+        };
+  
+        res.status(201).json({
+          success: true,
+          message: 'Ride requested successfully! Looking for available drivers...',
+          data: response
+        });
+  
+      } catch (error) {
+        await connection.rollback();
+        connection.release();
+        console.error('Database error:', error);
+        throw error;
+      }
+  
     } catch (error) {
-      await connection.rollback();
-      connection.release();
-      console.error('Database error:', error);
-      throw error;
+      console.error('Request ride error:', error);
+      res.status(500).json({ 
+        success: false,
+        message: 'Failed to request ride. Please try again.',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
-
-  } catch (error) {
-    console.error('Request ride error:', error);
-    res.status(500).json({ 
-      message: 'Failed to request ride. Please try again.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-};
+  };
 
 module.exports = {
   getDriverCurrentRide,
